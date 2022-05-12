@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+
+    <button id="find-me">Show my location</button><br />
+    <p id="status"></p>
+    <a id="map-link" target="_blank"></a>
+
+    <div id="test"></div>
+
+    <iframe src="" id="map" height="350" width="350"></iframe>
+
+    <!-- <iframe width="425" height="350" src="https://www.openstreetmap.org/export/embed.html?bbox=135.49303293228152%2C34.76246020524044%2C135.4985582828522%2C34.76492808419622&amp;layer=mapnik&amp;marker=34.76369415394073%2C135.49579560756683" style="border: 1px solid black"></iframe> -->
+    
+    <script>
+        function geoFindMe() {
+
+            const status = document.querySelector('#status');
+            const mapLink = document.querySelector('#map-link');
+            const map = document.getElementById('map');
+
+            mapLink.href = '';
+            mapLink.textContent = '';
+
+            function success(position) {
+                const latitude = position.coords.latitude;
+                const longitude = position.coords.longitude;
+
+                status.textContent = '';
+                mapLink.href = `https://www.openstreetmap.org/#map=18/${latitude}/${longitude}`;
+                mapLink.textContent = `Latitude: ${latitude} °, Longitude: ${longitude} °`;
+
+
+                // openstreetmapの著作権 https://www.openstreetmap.org/copyright/en (オープンデータ)
+                // マップのURL
+                map.src = `https://www.openstreetmap.org/export/embed.html`;
+                // 開始位置X + 開始位置Y + 終了位置X + 終了位置X　接続子が%2C
+                const zoom = 0.0006; // 拡大率
+                map.src += `?bbox=${(longitude - zoom)}%2C${(latitude - zoom)}%2C${(longitude + zoom)}%2C${(latitude + zoom)}`;
+                // マップレイヤーID
+                map.src +=`&layer=mapnik`;
+                // マーカー位置
+                map.src += `&marker=${latitude}%2C${longitude}`;
+
+
+                // 座標から住所取得
+                // https://geoapi.heartrails.com/api.html#geolocation // 参考
+                fetch(`https://geoapi.heartrails.com/api/json?method=searchByGeoLocation&x=${longitude}&y=${latitude}`)
+                    .then(response => {
+                        if (response.ok) {
+                            return response.text();
+                        } else {
+                            return Promise.reject(new Error('エラーです'));
+                        }
+                    })
+                    .then(response => {
+                        const objRes = JSON.parse(response);
+
+                        // 複数回答があるので一番差が小さいものを取得
+                        const minXString = objRes.response.location[0].x;
+                        const minYString = objRes.response.location[0].y;
+
+                        // 数値に変換
+                        const minXNumber = Number.parseFloat(minXString);
+                        const minYNumber = Number.parseFloat(minYString);
+
+                        // 差を格納する
+                        const minX = Math.abs(longitude - minXNumber);
+                        const minY = Math.abs(latitude - minYNumber);
+                        
+                        // 差の合計
+                        let minXY = minX + minY;
+
+                        // 最小の住所情報格納
+                        let minAddress = objRes.response.location[0];
+
+                        Object.keys(objRes.response.location).forEach((key)=>{
+                            const minXString  = objRes.response.location[key].x
+                            const minYString = objRes.response.location[key].y
+
+                            // 数値に変換
+                            const minXNumber = Number.parseFloat(minXString);
+                            const minYNumber = Number.parseFloat(minYString);
+
+                            // 差の絶対値取得
+                            const saveX = Math.abs(longitude - minXNumber);
+                            const saveY = Math.abs(latitude - minYNumber);
+                            const saveXY = saveX + saveY;
+
+                            // 小さい時格納
+                            if (saveXY < minXY) {
+                                minXY = saveXY;
+                                minAddress = objRes.response.location[key];
+                            }
+                        });
+                        Object.keys(minAddress).forEach((key)=>{
+                            console.log(minAddress);
+                            const p = document.createElement("p");
+                            p.innerHTML = key + ":" + minAddress[key];
+                            document.getElementById("test").appendChild(p);
+                        });
+                        
+                        console.log(minAddress);
+                    });
+            }
+
+            function error() {
+                status.textContent = 'Unable to retrieve your location';
+            }
+
+            if (!navigator.geolocation) {
+                status.textContent = 'Geolocation is not supported by your browser';
+            } else {
+                status.textContent = 'Locating…';
+                navigator.geolocation.getCurrentPosition(success, error);
+            }
+
+        }
+
+        document.querySelector('#find-me').addEventListener('click', geoFindMe);
+
+    </script>
+</body>
+
+</html>
